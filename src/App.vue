@@ -372,7 +372,6 @@ main {
   background: var(--card-bg);
   padding: 1rem;
   border-radius: 12px;
-  border-radius: 12px;
   border: 1px solid var(--border);
   /* Ensure controls don't take up too much vertical space */
   flex-shrink: 0;
