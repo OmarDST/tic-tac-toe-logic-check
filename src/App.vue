@@ -160,6 +160,62 @@ function runBatchTests() {
   }
 }
 
+const copied = ref(false);
+const showToast = ref(false);
+
+function shareCode() {
+  const code = userCode.value;
+
+  // Trigger toast immediately so user sees feedback right away
+  showToast.value = true;
+  copied.value = true;
+  setTimeout(() => {
+    showToast.value = false;
+    copied.value = false;
+  }, 2000);
+
+  // Attempt to copy using Modern API
+  if (navigator.clipboard && globalThis.isSecureContext) {
+    navigator.clipboard.writeText(code).catch((err) => {
+      console.error("Modern clipboard failed, trying fallback", err);
+      fallbackCopyTextToClipboard(code);
+    });
+  } else {
+    // Fallback for unsecure contexts (like .local domains)
+    fallbackCopyTextToClipboard(code);
+  }
+}
+
+function fallbackCopyTextToClipboard(text) {
+  const textArea = document.createElement("textarea");
+  textArea.value = text;
+
+  // Ensure the textarea is not visible or affecting layout
+  textArea.style.position = "fixed";
+  textArea.style.left = "-9999px";
+  textArea.style.top = "0";
+  document.body.appendChild(textArea);
+  textArea.focus();
+  textArea.select();
+
+  try {
+    document.execCommand("copy");
+  } catch (err) {
+    console.error("Fallback copy failed", err);
+  }
+
+  textArea.remove();
+}
+
+function resetCode() {
+  userCode.value = defaultCode;
+  resetResult();
+  showToast.value = true;
+  setTimeout(() => {
+    showToast.value = false;
+  }, 2000);
+}
+
 onMounted(() => {
   generateRandomBoard();
 });
@@ -197,7 +253,58 @@ onMounted(() => {
       </div>
 
       <div class="right-panel">
-        <CodeEditor v-model="userCode" />
+        <div class="editor-container-outer">
+          <div class="editor-actions-overlay">
+            <button
+              class="icon-btn"
+              @click="shareCode"
+              :title="copied ? 'Copied!' : 'Copy code'"
+            >
+              <svg
+                v-if="!copied"
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path
+                  d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+                ></path>
+              </svg>
+              <svg
+                v-else
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="var(--success)"
+                stroke-width="2"
+              >
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            </button>
+            <button class="icon-btn" @click="resetCode" title="Reset code">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                <path d="M3 3v5h5" />
+              </svg>
+            </button>
+          </div>
+          <CodeEditor v-model="userCode" />
+        </div>
 
         <div class="controls">
           <div class="controls-header">
@@ -255,7 +362,7 @@ onMounted(() => {
                   >
                     <polygon points="5 3 19 12 5 21 5 3" />
                   </svg>
-                  Execute Code
+                  Execute
                 </button>
               </div>
             </div>
@@ -263,52 +370,116 @@ onMounted(() => {
         </div>
       </div>
     </main>
+  </div>
 
-    <!-- Results Modal -->
-    <div
-      class="modal-backdrop"
-      v-if="showStatsModal && batchResults"
-      @click="showStatsModal = false"
-    >
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h2>Competition Results</h2>
-          <button class="close-btn" @click="showStatsModal = false">×</button>
-        </div>
+  <!-- Toast Notification moved outside of container to avoid transform issues -->
+  <Transition name="toast">
+    <div v-if="showToast" class="toast">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M20 6 9 17 4 12" />
+      </svg>
+      {{ copied ? "Solution copied to clipboard!" : "Code reset to default!" }}
+    </div>
+  </Transition>
 
-        <div class="stats-grid-modal">
-          <div
-            class="stat-card large"
-            :class="{
-              success: batchResults.passed === batchResults.total,
-              error: batchResults.passed !== batchResults.total,
-            }"
+  <!-- Results Modal -->
+  <div
+    class="modal-backdrop"
+    v-if="showStatsModal && batchResults"
+    @click="showStatsModal = false"
+  >
+    <div class="modal-content" @click.stop>
+      <div class="modal-header">
+        <h2>Competition Results</h2>
+        <button class="close-btn" @click="showStatsModal = false">×</button>
+      </div>
+
+      <div class="stats-grid-modal">
+        <div
+          class="stat-card large"
+          :class="{
+            success: batchResults.passed === batchResults.total,
+            error: batchResults.passed !== batchResults.total,
+          }"
+        >
+          <span class="stat-label">Accuracy</span>
+          <span class="stat-value"
+            >{{
+              Math.round((batchResults.passed / batchResults.total) * 100)
+            }}%</span
           >
-            <span class="stat-label">Accuracy</span>
-            <span class="stat-value"
-              >{{
-                Math.round((batchResults.passed / batchResults.total) * 100)
-              }}%</span
-            >
-            <div class="stat-sub">
-              {{ batchResults.passed }}/{{ batchResults.total }} Passed
-            </div>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">Avg Time</span>
-            <span class="stat-value">{{ batchResults.avgTime }}ms</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">Throughput</span>
-            <span class="stat-value"
-              >{{ batchResults.ops.toLocaleString() }} ops/s</span
-            >
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">Code Size</span>
-            <span class="stat-value">{{ batchResults.chars }} chars</span>
+          <div class="stat-sub">
+            {{ batchResults.passed }}/{{ batchResults.total }} Passed
           </div>
         </div>
+        <div class="stat-card">
+          <span class="stat-label">Avg Time</span>
+          <span class="stat-value">{{ batchResults.avgTime }}ms</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Throughput</span>
+          <span class="stat-value"
+            >{{ batchResults.ops.toLocaleString() }} ops/s</span
+          >
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Code Size</span>
+          <span class="stat-value">{{ batchResults.chars }} chars</span>
+        </div>
+      </div>
+
+      <div
+        v-if="batchResults.passed === batchResults.total"
+        class="modal-footer fade-in"
+        style="margin-top: 2rem; display: flex; justify-content: center"
+      >
+        <button
+          class="action-btn primary"
+          @click="shareCode"
+          style="width: 100%"
+        >
+          <svg
+            v-if="!copied"
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+            <polyline points="16 6 12 2 8 6" />
+            <line x1="12" y1="2" x2="12" y2="15" />
+          </svg>
+          <svg
+            v-else
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#0f172a"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          {{ copied ? "Copied Solution!" : "Share Solution" }}
+        </button>
       </div>
     </div>
   </div>
@@ -605,6 +776,74 @@ main {
     opacity: 1;
     transform: scale(1);
   }
+}
+
+/* Editor Overlay Styling */
+.editor-container-outer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-actions-overlay {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  display: flex;
+  gap: 8px;
+  z-index: 100;
+}
+
+.icon-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(4px);
+}
+
+.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
+  transform: translateY(-1px);
+}
+
+/* Toast Styling */
+.toast {
+  position: fixed;
+  bottom: 3rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e293b;
+  border: 1px solid var(--success);
+  color: var(--success);
+  padding: 1rem 2rem;
+  border-radius: 50px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 9999;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.toast-enter-active,
+.toast-leave-active {
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translate(-50%, 40px) scale(0.9);
 }
 
 @media (max-width: 800px) {
