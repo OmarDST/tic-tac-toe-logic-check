@@ -8,17 +8,21 @@ const result = ref(null);
 const executionTime = ref(null);
 const error = ref(null);
 
-const defaultCode = `// Input: board (Array of 9 items: 'X', 'O', or null)
-// Output: Return 'X', 'O', or null if no winner
+const defaultCode = `/**
+ * @param {string[]} board - An array of 9 items: 'X', 'O', or null
+ * @return {string|null} - Return 'X', 'O', or null if no winner
+ */
+function checkWinner(board) {
+  const winningCombinations = [
+    [0, 1, 2], [3, 4, 5], [6, 7, 8], // Rows
+    [0, 3, 6], [1, 4, 7], [2, 5, 8], // Cols
+    [0, 4, 8], [2, 4, 6]             // Diagonals
+  ];
 
-const winningCombinations = [
-  [0, 1, 2], [3, 4, 5], [6, 7, 8], // Rows
-  [0, 3, 6], [1, 4, 7], [2, 5, 8], // Cols
-  [0, 4, 8], [2, 4, 6]             // Diagonals
-];
-
-// Your logic here...
-return null;
+  // Your logic here...
+  
+  return null;
+}
 `;
 
 const userCode = ref(defaultCode);
@@ -79,9 +83,10 @@ function runCode() {
   resetResult();
 
   try {
-    // Create a function from the user code
-    // We wrap it to ensure it has access to 'board'
-    const userFunction = new Function("board", userCode.value);
+    // Create a function that returns the user's function
+    // This allows them to define a full function in the editor
+    const runner = new Function(`${userCode.value}\nreturn checkWinner;`);
+    const userFunction = runner();
 
     // Verify logic
     const expectedWinner = checkWinner(board.value);
@@ -117,7 +122,8 @@ function runBatchTests() {
   let errors = 0;
 
   try {
-    const userFunction = new Function("board", userCode.value);
+    const runner = new Function(`${userCode.value}\nreturn checkWinner;`);
+    const userFunction = runner();
 
     const start = performance.now();
     for (let i = 0; i < totalTests; i++) {
